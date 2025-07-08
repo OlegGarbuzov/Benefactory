@@ -1,6 +1,7 @@
 package com.benefactory.hrtech;
 
 import com.benefactory.hrtech.exception.InvalidMoneyAmountException;
+import com.benefactory.hrtech.exception.MoneyAmountTooLargeException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

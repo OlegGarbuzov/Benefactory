@@ -1,4 +1,4 @@
-package com.benefactory.hrtech;
+package com.benefactory.hrtech.exception;
 
 import com.benefactory.hrtech.exception.MoneyAmountException;
 
