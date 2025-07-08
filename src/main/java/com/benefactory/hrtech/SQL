@@ -1,0 +1,153 @@
+
+SQL-запрос: получить родственников сотрудника с personId = 'test'
+
+	 Предварительно изучим структуру таблиц:
+
+	 HPPersonGeneric:
+       [sysId] //Идентификатор записи (внутренний ID)
+  	  ,[personId] //ID сотрудника (Тип значения? Уникально?)
+      ,[sysVersion] //Версия записи
+      ,[photoFkSysId] //Ссылка на фото (на другую таблицу)
+      ,[sysExtension] //Расширение, вероятно вложения
+      ,[salutation] //Обращение
+      ,[familyName] //Фамилия
+      ,[givenName] //Имя
+      ,[middleName] //Отчество
+      ,[name] //Полное имя ?
+      ,[nameTranslationSysId] //Транслитерация имени, вероятно
+      ,[altFamilyName] //Альтернативная фамилия, вероятно заполняется при изменении сотрудником или родственником при изменении имени
+      ,[altGivenName] //Альтернативное имя
+      ,[altMiddleName] //Альтернативное отчество
+      ,[birthDate] //Дата рождения
+      ,[gender] //Пол
+      ,[maritalStatus] //Семейное положение
+      ,[primaryLanguage] //Родной язык
+      ,[citizenship] //Гражданство
+      ,[residence] //Место проживания
+      ,[ethnicity] //Этническая принадлежность ?
+      ,[religion] //Религиозная принадлежность ?
+      ,[sysTenant] // ?
+      ,[createdBy] //Автор записи
+      ,[creationTime] //Дата записи
+      ,[sysChangeUser] //Автор последнего изменения
+      ,[sysChangeTime] //Дата последнего изменения
+      ,[sysParentId] //?
+      ,[sysDateTo] //?
+      ,[sysDateFrom] //?
+
+    HPPersonDependant:
+      [sysId] //Идентификатор записи
+      ,[sysVersion] //Версия записи
+      ,[HPPersonGenericSysId] //sysId сотрудника
+ 	  ,[HPRelatedPersonSysId] //sysId родственника
+      ,[attachmentFkSysId] //Вложение
+      ,[sysExtension] //Расширение, вероятно вложения
+      ,[contactRelationship] //родственная связь
+      ,[id] //ID записи
+ 	  ,[sysTenant] //?
+      ,[createdBy] //Автор записи
+      ,[creationTime] //Дата записи
+      ,[sysChangeUser] //Автор последнего изменения
+      ,[sysChangeTime] //Дата последнего изменения
+      ,[sysParentId] //?
+      ,[sysDateTo] //?
+      ,[sysDateFrom] //?
+
+
+	Диаграмма связей, вероятно, такая:
+
+┌───────────────────────────┐             ┌───────────────────────────┐
+│     HPPersonGeneric       │             │     HPPersonGeneric       │
+│      (Сотрудник)          │             │     (Родственник)         │
+│ ┌───────────────────────┐ │             │ ┌───────────────────────┐ │
+│ │ sysId (Primary)       │◀──────────────┤ │ sysId (Primary)       │ │
+│ │ personId              │ │             │ │ personId              │ │
+│ │ familyName            │ │             │ │ familyName            │ │
+│ │ givenName             │ │             │ │ givenName             │ │
+│ │ birthDate             │ │             │ │ birthDate             │ │
+│ │ ...                   │ │             │ │ ...                   │ │
+│ └───────────────────────┘ │             │ └───────────────────────┘ │
+└───────────────────────────┘             └───────────────────────────┘
+               ▲                                       ▲
+               │                                       │
+               │                                       │
+        ┌──────┴───────────────────┐          ┌────────┴──────┐
+        │ HPPersonDependant        │
+        └──────────────────────────┘
+        │ sysId (PK)               │
+        │ HPPersonGenericSysId (FK)│ ────────▶ сотрудник.sysId
+        │ HPRelatedPersonSysId (FK)│ ────────▶ родственник.sysId
+        │ contactRelationship      │          (например: супруга)
+        │ ...                      │
+        └──────────────────────────┘
+
+	Объяснение по-шагово:
+
+	Используем два алиаса для таблицы HPPersonGeneric, т.к. будем к ней обращаться два раза:
+	rel - для родственника, employee - для сотрудника.
+
+	1. FROM HPPersonGeneric employee.
+	Просто все люди из таблицы.
+
+	На этом этапе таблица такая:
+
+	   sysId	personId	familyName	givenName	...
+		1	        test	    Иванов	     Иван	...
+		2	        null	    Петров	     Петр	...
+
+	2. JOIN HPPersonDependant dep ON employee.sysId = dep.HPPersonGenericSysId.
+	Получаем список всех родственников этого сотрудника, но только их ID и родственную связь — мы ещё не знаем, как их зовут, когда родились и т.п.:
+
+employee.sysId	employee.personId	...	dep.HPPersonGenericSysId	dep.HPRelatedPersonSysId	dep.contactRelationship
+		     1	             test	...                        1	                      10	                супруга
+		     1	             test	...	                       1	                      11	          прапрадедушка
+
+	3. JOIN HPPersonGeneric rel ON rel.sysId = dep.HPRelatedPersonSysId
+	Теперь присоединяем HPPersonGeneric(под алиасом rel), линкуем её по sysId = HPRelatedPersonSysId? что бы вытащить данные родственников:
+
+| rel.familyName | rel.givenName | rel.middleName | rel.birthDate | dep.contactRelationship |
+| -------------- | ------------- | -------------- | ------------- | ----------------------- |
+| Мурова         | Мария         | Ивановна       | 1995-02-01    | супруга                 |
+| Кукушкин       | Алексей       | Викторович     | 1890-06-15    | прапрадедушка           |
+
+Производительность будет зависеть от наличия индексов и объёма данных
+
+	Итоговое решение:
+=============================================================================
+	SELECT
+		rel.familyName,
+		rel.givenName,
+		rel.middleName,
+		rel.birthDate,
+		dep.contactRelationship
+	FROM HPPersonGeneric employee
+	JOIN HPPersonDependant dep ON employee.sysId = dep.HPPersonGenericSysId
+	JOIN HPPersonGeneric rel ON rel.sysId = dep.HPRelatedPersonSysId
+	WHERE employee.personId = 'test';
+=============================================================================
+
+	Дополнительно:
+
+	1. Дубликаты родственников:
+	Если в таблице HPPersonDependant может быть несколько записей на одного и того же HPRelatedPersonSysId с одинаковым contactRelationship,
+	можем получить дубли в результирующей таблице.
+	Как вариант запрос можно дополнить 'DISTINCT':
+	SELECT DISTINCT
+		rel.familyName,
+		rel.givenName,
+		...
+
+	Но! Если родственник один, а связей несколько
+	(например, один и тот же родственник имеет несколько вариантов родственных связей) —
+	тогда дубликаты скорее уместны.
+
+	2. personId по идее уникален, но что, если нет? Не понятно он Primary Key или нет:
+	Есть риск, что выберется больше одного сотрудника.
+
+	3. contactRelationship - это enum или просто текст?
+	Если enum - получим криввые названия родственных связей. Надо изучать содержимое поля.
+
+	4. Можно добавить сортировку по ФИО родственников, но в ТЗ нет такой задачи:
+	ORDER BY rel.familyName, rel.givenName;
+
+	5.
